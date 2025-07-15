@@ -312,6 +312,45 @@ services:
 > Don't forget to set `--pass-environment` argument, otherwise you'll end up with the error "No interpreter found in
 > managed installations or search path"
 
+## Linux service example
+
+On Linux you can run `mcp-proxy` as a `systemd` service. This allows it to start
+automatically and run under a dedicated sub-user. The example below exposes the
+proxy on `0.0.0.0:8096` and runs the server as the `mcpproxy` user.
+
+1. Create the service user (once):
+
+   ```bash
+   sudo useradd --system --create-home --user-group mcpproxy
+   ```
+
+2. Save the following unit file as `/etc/systemd/system/mcp-proxy.service`:
+
+   ```ini
+   [Unit]
+   Description=MCP proxy service
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=mcpproxy
+   Group=mcpproxy
+   ExecStart=/usr/local/bin/mcp-proxy --port=8096 --host 0.0.0.0 uvx mcp-server-fetch
+   Restart=on-failure
+   WorkingDirectory=/home/mcpproxy
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+3. Reload `systemd` and start the service:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now mcp-proxy.service
+   ```
+
+
 ## Command line arguments
 
 ```bash
