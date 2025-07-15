@@ -78,12 +78,18 @@ def server_can_get_prompt(
 
 
 @pytest.fixture
-def server_can_list_tools(server: Server[object], tool: types.Tool) -> Server[object]:
+def tool_definition() -> types.Tool:
+    """Default tool definition used by tests."""
+    return types.Tool(name="tool", inputSchema=TOOL_INPUT_SCHEMA)
+
+
+@pytest.fixture
+def server_can_list_tools(server: Server[object], tool_definition: types.Tool) -> Server[object]:
     """Return a server instance with tools."""
 
     @server.list_tools()  # type: ignore[no-untyped-call,misc]
     async def _() -> list[types.Tool]:
-        return [tool]
+        return [tool_definition]
 
     return server
 
@@ -91,10 +97,10 @@ def server_can_list_tools(server: Server[object], tool: types.Tool) -> Server[ob
 @pytest.fixture
 def server_can_call_tool(
     server_can_list_tools: Server[object],
-    tool: Callable[..., t.Any],
+    call_tool_func: Callable[..., t.Any],
 ) -> Server[object]:
     """Return a server instance with tools."""
-    server_can_list_tools.call_tool()(tool)  # type: ignore[no-untyped-call]
+    server_can_list_tools.call_tool()(call_tool_func)  # type: ignore[no-untyped-call]
 
     return server_can_list_tools
 
@@ -185,7 +191,14 @@ def server_can_complete(
     ],
 ) -> Server[object]:
     """Return a server instance with logging capabilities."""
-    server.completion()(complete_callback)  # type: ignore[no-untyped-call]
+    async def wrapper(
+        ref: types.PromptReference | types.ResourceReference,
+        argument: types.CompletionArgument,
+        _context: types.CompletionContext | None,
+    ) -> types.Completion | None:
+        return await complete_callback(ref, argument)
+
+    server.completion()(wrapper)  # type: ignore[no-untyped-call]
     return server
 
 
@@ -212,7 +225,7 @@ async def test_list_prompts(
 
 
 @pytest.mark.parametrize(
-    "tool",
+    "tool_definition",
     [
         types.Tool(
             name="tool-name",
@@ -224,7 +237,7 @@ async def test_list_prompts(
 async def test_list_tools(
     session_generator: SessionContextManager,
     server_can_list_tools: Server[object],
-    tool: types.Tool,
+    tool_definition: types.Tool,
 ) -> None:
     """Test list_tools."""
     async with session_generator(server_can_list_tools) as session:
@@ -236,7 +249,7 @@ async def test_list_tools(
         assert not result.capabilities.logging
 
         list_tools_result = await session.list_tools()
-        assert list_tools_result.tools == [tool]
+        assert list_tools_result.tools == [tool_definition]
 
         with pytest.raises(McpError, match="Method not found"):
             await session.list_prompts()
@@ -268,11 +281,11 @@ async def test_set_logging_error(
         logging_level_callback.reset_mock()  # Reset the mock for the next test case
 
 
-@pytest.mark.parametrize("tool", [AsyncMock()])
+@pytest.mark.parametrize("call_tool_func", [AsyncMock()])
 async def test_call_tool(
     session_generator: SessionContextManager,
     server_can_call_tool: Server[object],
-    tool: AsyncMock,
+    call_tool_func: AsyncMock,
 ) -> None:
     """Test call_tool."""
     async with session_generator(server_can_call_tool) as session:
@@ -284,13 +297,13 @@ async def test_call_tool(
         assert not result.capabilities.resources
         assert not result.capabilities.logging
 
-        tool.return_value = []
+        call_tool_func.return_value = []
         call_tool_result = await session.call_tool("tool", {})
         assert call_tool_result.content == []
         assert not call_tool_result.isError
 
-        tool.assert_called_once_with("tool", {})
-        tool.reset_mock()
+        call_tool_func.assert_called_once_with("tool", {})
+        call_tool_func.reset_mock()
 
 
 @pytest.mark.parametrize(
@@ -493,11 +506,11 @@ async def test_complete(
         complete_callback.reset_mock()
 
 
-@pytest.mark.parametrize("tool", [AsyncMock()])
+@pytest.mark.parametrize("call_tool_func", [AsyncMock()])
 async def test_call_tool_with_error(
     session_generator: SessionContextManager,
     server_can_call_tool: Server[object],
-    tool: AsyncMock,
+    call_tool_func: AsyncMock,
 ) -> None:
     """Test call_tool."""
     async with session_generator(server_can_call_tool) as session:
@@ -509,7 +522,7 @@ async def test_call_tool_with_error(
         assert not result.capabilities.resources
         assert not result.capabilities.logging
 
-        tool.side_effect = Exception("Error")
+        call_tool_func.side_effect = Exception("Error")
 
         call_tool_result = await session.call_tool("tool", {})
         assert call_tool_result.isError

@@ -315,8 +315,10 @@ services:
 ## Linux service example
 
 On Linux you can run `mcp-proxy` as a `systemd` service. This allows it to start
-automatically and run under a dedicated sub-user. The example below exposes the
-proxy on `0.0.0.0:8096` and runs the server as the `mcpproxy` user.
+automatically and run under a dedicated sub-user. A ready to use example unit
+file is included as `mcp-proxy.service.example` in the project root. The snippet
+below exposes the proxy on `0.0.0.0:8096` and runs the server as the
+`mcpproxy` user.
 
 1. Create the service user (once):
 

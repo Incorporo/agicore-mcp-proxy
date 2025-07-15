@@ -1,0 +1,14 @@
+[Unit]
+Description=MCP proxy service
+After=network.target
+
+[Service]
+Type=simple
+User=agi-core
+Group=agi-core
+ExecStart=/srv/agi-connectors/proxy/venv/bin/mcp-proxy --port=18500 --host 127.0.0.2 --oauth --named-server-config /srv/agi-connectors/proxy/config.json
+Restart=on-failure
+WorkingDirectory=/srv/agi-connectors/proxy/
+
+[Install]
+WantedBy=multi-user.target
