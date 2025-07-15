@@ -94,6 +94,12 @@ def _add_arguments_to_parser(parser: argparse.ArgumentParser) -> None:
         default="sse",  # For backwards compatibility
         help="The transport to use for the client. Default is SSE.",
     )
+    client_group.add_argument(
+        "--oauth",
+        action=argparse.BooleanOptionalAction,
+        help="Use OAuth authentication as defined by the MCP auth spec.",
+        default=False,
+    )
 
     stdio_client_options = parser.add_argument_group("stdio client options")
     stdio_client_options.add_argument(
@@ -225,7 +231,12 @@ def _handle_sse_client_mode(
     # Start a client connected to the SSE server, and expose as a stdio server
     logger.debug("Starting SSE/StreamableHTTP client and stdio server")
     headers = dict(args_parsed.headers)
-    if api_access_token := os.getenv("API_ACCESS_TOKEN", None):
+    if args_parsed.oauth:
+        from .oauth import obtain_access_token
+
+        token = asyncio.run(obtain_access_token(args_parsed.command_or_url))
+        headers["Authorization"] = f"Bearer {token}"
+    elif api_access_token := os.getenv("API_ACCESS_TOKEN", None):
         headers["Authorization"] = f"Bearer {api_access_token}"
 
     if args_parsed.transport == "streamablehttp":
